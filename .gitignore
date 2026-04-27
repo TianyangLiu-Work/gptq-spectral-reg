@@ -1,16 +1,7 @@
-# Python
-__pycache__/
-*.py[cod]
-*.egg-info/
-.hermes/
+# Experiment results (too large for repo)
+experiments/
 
-# Model caches (downloaded weights — too large for git)
-.cache/
-.huggingface/
-
-# Slurm outputs
-*.out
-*.err
-
-# OS
-.DS_Store
+# Local scratch / temp files
+*.patched.py
+patch_*.py
+detect_*.sh

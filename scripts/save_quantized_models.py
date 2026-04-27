@@ -38,6 +38,7 @@ def parse_args():
     p.add_argument("--method", default=None, help="none, stronger_damping, frobenius, spectral")
     p.add_argument("--beta", type=float, default=None, help="regularization beta")
     p.add_argument("--group_size", type=int, default=128, help="128 or 32")
+    p.add_argument("--bits", type=int, default=4, help="Number of bits (2, 3, 4, etc.)")
     return p.parse_args()
 
 
@@ -47,6 +48,7 @@ def main():
     method = args.method
     beta = args.beta
     group_size = args.group_size
+    bits = args.bits
     is_fp16 = (label == "FP16")
 
     t_start = time.time()
@@ -172,7 +174,7 @@ def main():
             md = torch.diag(H_reg).mean()
             H_reg = H_reg + 0.01 * md * torch.eye(H_reg.shape[0], device="cuda", dtype=torch.float32)
             w = refs[n].float().to("cuda")
-            q_w = correct_gptq(w, H_reg, bits=BITS)
+            q_w = correct_gptq(w, H_reg, bits=bits)
             dw = (q_w - refs[n].float().to("cuda")).float()
             v, _ = power_iteration(dw, n_iter=20)
             spec_v[n] = v.cpu()
@@ -204,10 +206,10 @@ def main():
                 H = H + 0.01 * md * torch.eye(d, device="cuda", dtype=torch.float32)
 
             w = refs[n].float().to("cuda")
-            q_w = correct_gptq(w, H, bits=BITS)
+            q_w = correct_gptq(w, H, bits=bits)
 
             if group_size < refs[n].shape[1]:
-                q_w, _, _ = quantize_weight_groupwise(q_w, bits=BITS, group_size=group_size)
+                q_w, _, _ = quantize_weight_groupwise(q_w, bits=bits, group_size=group_size)
                 q_w = q_w.to(device="cuda", dtype=torch.float32)
 
             deltas[n] = q_w.cpu() - refs[n]
@@ -224,7 +226,7 @@ def main():
         print(f"[{time.strftime('%H:%M:%S')}] FP16 mode — no quantization needed", flush=True)
 
     # ── Save ──
-    save_name = f"opt-6.7b-g{group_size}-{label}"
+    save_name = f"opt-6.7b-g{group_size}-{bits}bit-{label}"
     save_path = BASE_DIR / save_name
     print(f"[{time.strftime('%H:%M:%S')}] Saving to {save_path}...", flush=True)
     model.save_pretrained(str(save_path), safe_serialization=True)
@@ -235,7 +237,7 @@ def main():
         "method": label,
         "method_raw": method,
         "beta": beta,
-        "bits": BITS,
+        "bits": bits,
         "group_size": group_size,
         "quant_time_sec": round(time.time() - t_start, 1),
     }

@@ -27,10 +27,37 @@ where $\lambda = 0.01$ is the standard damping coefficient, $\beta$ is the regul
 
 ## Results
 
-### OPT-6.7B (g128, 4-bit)
+### OPT-6.7B (g128, 4-bit, full dataset)
 
-| Method | PPL $\downarrow$ | Lambada | HellaSwag | ARC-c | WinoGrande |
-|--------|-------|---------|-----------|-------|------------|
+| Method | PPL $\downarrow$ | Lambada | HellaSwag | ARC-c | WinoGrande | Avg |
+|--------|-------|---------|-----------|-------|------------|-----|
+| FP16 | 10.89 | 0.7100 | 0.5050 | 0.2850 | 0.6900 | 0.5475 |
+| GPTQ_base | 11.29 | 0.6400 | 0.4600 | **0.2700** | 0.6500 | 0.5050 |
+| Damp_0.05 | 11.28 | **0.6550** | 0.4650 | **0.2700** | 0.6400 | 0.5075 |
+| Frob_0.001 | 11.28 | 0.6400 | **0.4700** | 0.2650 | **0.6750** | 0.5125 |
+| Spectral_0.01 | 11.29 | 0.6450 | 0.4550 | 0.2650 | 0.6550 | 0.5050 |
+
+### OPT-6.7B (g32, 4-bit, full dataset)
+
+| Method | Lambada | HellaSwag | ARC-c | WinoGrande | Avg |
+|--------|---------|-----------|-------|------------|-----|
+| GPTQ_base | 0.6450 | **0.4650** | 0.2900 | 0.6400 | 0.5100 |
+| Damp_0.05 | 0.6500 | **0.4650** | **0.2950** | 0.6250 | 0.5088 |
+| Frob_0.001 | 0.6550 | 0.4600 | 0.2750 | **0.6750** | 0.5163 |
+| Spectral_0.01 | **0.6650** | 0.4600 | 0.2900 | 0.6600 | 0.5188 |
+
+### Limit=200 subset (for comparison)
+
+| Group | Best Method | Avg |
+|-------|------------|-----|
+| g128 | Frob_0.001 = Damp_0.05 | 0.5125 / 0.5075 |
+| g32 | Spectral_0.01 | 0.5188 |
+
+> **Conclusion:** None of the regularization methods produce statistically significant improvements over GPTQ_base at 6.7B scale (all p > 0.05, full dataset). Differences are within noise. Effects may be more visible at larger scales (30B+) or finer quantization (3-bit).
+
+---
+
+-----|-------|---------|-----------|-------|------------|
 | FP16 | 10.89 | — | — | — | — |
 | GPTQ\_base | 11.29 | — | — | — | — |
 | Damp\_0.05 | **11.28** | — | — | — | — |
@@ -163,3 +190,4 @@ turm          # TUI queue viewer
 | Model storage | `/mnt/host-share/gptq-models/` (467 GB NFS) |
 | Data disk | `/data/` (887 GB) |
 | GitHub | [TianyangLiu-Work/gptq-spectral-reg](https://github.com/TianyangLiu-Work/gptq-spectral-reg) |
+
