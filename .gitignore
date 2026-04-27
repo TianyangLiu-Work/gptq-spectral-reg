@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.hermes/
+
+# Model caches
+.cache/
+.huggingface/
+
+# Slurm outputs
+*.out
+*.err
+
+# OS
+.DS_Store
