@@ -7,15 +7,17 @@
 #SBATCH -e experiments/phase4/run.err
 # No MPS export — let Slurm handle GPU isolation
 
-echo "START Sun Apr 26 04:18:38 PM CDT 2026 JobID="
-echo "PWD=/home/tyliu/quantization2"
+echo "START $(date) JobID=$SLURM_JOB_ID"
+echo "PWD=$(pwd)"
 
-export PYTHONPATH=/home/tyliu/quantization2:/home/tyliu/quantization:
 export CUDA_VISIBLE_DEVICES=0
 
-# Run directly — Python should inherit SLURM_JOB_ID env var
-/home/tyliu/quantization/.conda/bin/python -u run_phase4.py
+cd /home/tyliu/gptq-spectral-reg
+export PYTHONPATH=$PWD:/home/tyliu/quantization:
 
-RC=0
-echo "EXIT_CODE="
-echo "DONE Sun Apr 26 04:18:38 PM CDT 2026"
+# Run directly — Python should inherit SLURM_JOB_ID env var
+/home/tyliu/quantization/.conda/bin/python -u scripts/run_phase4.py
+
+RC=$?
+echo "EXIT_CODE=$RC"
+echo "DONE $(date)"

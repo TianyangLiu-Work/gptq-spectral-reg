@@ -17,10 +17,12 @@ export MKL_NUM_THREADS=${SLURM_CPUS_PER_TASK:-1}
 source /data/conda/bin/activate
 conda activate /home/tyliu/quantization/.conda
 export HF_HOME=/home/tyliu/.cache/huggingface
-export HF_TOKEN=
+
+cd /home/tyliu/gptq-spectral-reg
+export PYTHONPATH=$PWD:/home/tyliu/quantization:
 
 echo "Running Phase 3: OPT-1.3B Spectral regularization"
-python run_phase2.py
+python scripts/run_phase2.py
 echo "EXIT_CODE=$?"
 
 echo "DONE $(date)"

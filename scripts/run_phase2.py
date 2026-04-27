@@ -159,7 +159,7 @@ def apply_deltas(handles, refs, deltas):
 # ============================================================
 # Local gptq_spec imports
 # ============================================================
-sys.path.insert(0, str(Path(__file__).parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from gptq_spec.hessian import build_hessian, build_hessian_with_options
 from gptq_spec.power_iter import top_singular_vector as power_iteration
 from gptq_spec.hessian import add_damping

@@ -4,7 +4,7 @@ Memory-optimized: instant Hessian building, no activation storage."""
 import sys, time, json, math, torch
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from gptq_spec.power_iter import top_singular_vector as power_iteration
 
 device = torch.device("cuda:0")

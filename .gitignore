@@ -4,7 +4,7 @@ __pycache__/
 *.egg-info/
 .hermes/
 
-# Model caches
+# Model caches (downloaded weights — too large for git)
 .cache/
 .huggingface/
 

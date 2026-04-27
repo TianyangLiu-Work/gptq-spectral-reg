@@ -9,10 +9,12 @@
 echo "START $(date) JobID=$SLURM_JOB_ID"
 echo "PWD=$(pwd)"
 
-export PYTHONPATH=/home/tyliu/quantization2:/home/tyliu/quantization:
 export CUDA_VISIBLE_DEVICES=0
 
-/home/tyliu/quantization/.conda/bin/python -u eval_downstream.py
+cd /home/tyliu/gptq-spectral-reg
+export PYTHONPATH=$PWD:/home/tyliu/quantization:
+
+/home/tyliu/quantization/.conda/bin/python -u scripts/eval_downstream.py
 
 RC=$?
 echo "EXIT_CODE=$RC"

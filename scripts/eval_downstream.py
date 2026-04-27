@@ -6,7 +6,7 @@ then evaluates on 4 zero-shot tasks using lm_eval."""
 import sys, time, json, math, torch, os
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from gptq_spec.power_iter import top_singular_vector as power_iteration
 from lm_eval import simple_evaluate
 
