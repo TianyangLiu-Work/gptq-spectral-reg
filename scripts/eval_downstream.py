@@ -216,13 +216,13 @@ def main():
         # ── Run lm_eval benchmarks ──
         print(f"[{time.strftime('%H:%M:%S')}]  Running lm_eval tasks...", flush=True)
 
-        lm = HFLM(pretrained=model, batch_size="auto:4")
+        lm_wrapper = HFLM(pretrained=model, batch_size="auto:4")
 
         for task in EVAL_TASKS:
             t_task = time.time()
             try:
                 result = simple_evaluate(
-                    lm=lm,
+                    model=lm_wrapper,
                     tasks=[task],
                     num_fewshot=NUM_FEWSHOT[task],
                     limit=200,
