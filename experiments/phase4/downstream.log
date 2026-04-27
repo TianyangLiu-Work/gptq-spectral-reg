@@ -1,0 +1,111 @@
+START Sun Apr 26 10:46:42 PM CDT 2026 JobID=322
+PWD=/home/tyliu/gptq-spectral-reg
+[22:46:48] Loading model and data...
+[22:46:54] Preparing data...
+[22:47:08] Finding linear layers...
+  160 quantizable layers
+[22:47:08] Collecting Hessians (128 calib samples)...
+  batch 1/16
+  batch 2/16
+  batch 3/16
+  batch 4/16
+  batch 5/16
+  batch 6/16
+  batch 7/16
+  batch 8/16
+  batch 9/16
+  batch 10/16
+  batch 11/16
+  batch 12/16
+  batch 13/16
+  batch 14/16
+  batch 15/16
+  batch 16/16
+  160 Hessians collected
+[22:52:08] Capturing reference weights...
+[22:52:15] Spectral estimation...
+  spectral 20/160
+  spectral 40/160
+  spectral 60/160
+  spectral 80/160
+  spectral 100/160
+  spectral 120/160
+  spectral 140/160
+  spectral 160/160
+  Estimated 160 spectral vectors
+
+======================================================================
+[22:55:12] ==================================================
+[22:55:12]  FP16_cached
+[22:55:12] ==================================================
+[22:55:14]  Running lm_eval tasks...
+Passed argument batch_size = auto:4.0. Detecting largest batch size
+Determined largest batch size: 64
+Passed argument batch_size = auto:4.0. Detecting largest batch size
+Determined largest batch size: 64
+bootstrapping for stddev: perplexity
+[22:56:07]    lambada_openai      : acc=0.7100 ± 0.0322  (53.0s)
+[22:56:28]    hellaswag           : acc=0.5050 ± 0.0354  (20.2s)
+[22:56:36]    arc_challenge       : acc=0.2850 ± 0.0320  (8.0s)
+[22:56:43]    winogrande          : acc=0.6900 ± 0.0328  (7.5s)
+[22:56:45]  FP16_cached total: 92.7s
+[22:56:45] ======================================================================
+
+======================================================================
+[22:56:45] ==================================================
+[22:56:45]  GPTQ_base
+[22:56:45] ==================================================
+  quant 20/160
+  quant 40/160
+  quant 60/160
+  quant 80/160
+  quant 100/160
+  quant 120/160
+  quant 140/160
+  quant 160/160
+[23:00:18]  Quant done in 213.1s
+[23:00:19]  Running lm_eval tasks...
+Passed argument batch_size = auto:4.0. Detecting largest batch size
+Determined largest batch size: 64
+Passed argument batch_size = auto:4.0. Detecting largest batch size
+Determined largest batch size: 64
+bootstrapping for stddev: perplexity
+[23:01:10]    lambada_openai      : acc=0.6800 ± 0.0331  (51.2s)
+[23:01:22]    hellaswag           : acc=0.4950 ± 0.0354  (11.2s)
+[23:01:29]    arc_challenge       : acc=0.2800 ± 0.0318  (7.1s)
+[23:01:35]    winogrande          : acc=0.6600 ± 0.0336  (6.3s)
+[23:01:37]  GPTQ_base total: 291.9s
+[23:01:37] ======================================================================
+
+======================================================================
+[23:01:37] ==================================================
+[23:01:37]  Damp_0.05
+[23:01:37] ==================================================
+  quant 20/160
+  quant 40/160
+  quant 60/160
+  quant 80/160
+  quant 100/160
+  quant 120/160
+  quant 140/160
+  quant 160/160
+[23:05:09]  Quant done in 212.5s
+[23:05:10]  Running lm_eval tasks...
+Passed argument batch_size = auto:4.0. Detecting largest batch size
+Determined largest batch size: 64
+Passed argument batch_size = auto:4.0. Detecting largest batch size
+Determined largest batch size: 64
+bootstrapping for stddev: perplexity
+[23:06:02]    lambada_openai      : acc=0.6850 ± 0.0329  (51.1s)
+[23:06:13]    hellaswag           : acc=0.4800 ± 0.0354  (11.2s)
+[23:06:20]    arc_challenge       : acc=0.3000 ± 0.0325  (7.1s)
+[23:06:26]    winogrande          : acc=0.6550 ± 0.0337  (6.1s)
+[23:06:28]  Damp_0.05 total: 291.2s
+[23:06:28] ======================================================================
+
+======================================================================
+[23:06:28] ==================================================
+[23:06:28]  Frob_0.001
+[23:06:28] ==================================================
+  quant 20/160
+  quant 40/160
