@@ -1,56 +1,59 @@
 #!/usr/bin/env python3
-"""Save quantized OPT-6.7B models for later downstream evaluation.
+"""Save a quantized OPT-6.7B model for later downstream evaluation.
 
-Quantizes with 4 methods (GPTQ_base, Damp_0.05, Frob_0.001, Spectral_0.01)
-at 2 group sizes (128, 32), then saves each as a complete model directory
-loadable via AutoModelForCausalLM.from_pretrained().
+Usage:
+  python save_quantized_models.py \
+      --label GPTQ_base --method none --beta 0.01 \
+      --group_size 128
+  python save_quantized_models.py --label FP16
 
-IMPORTANT: Behaves exactly like run_phase4.py for g128 (per-channel GPTQ only,
-group_size is just blocksize) and like run_phase5.py for g32 (per-channel GPTQ
-then requantize_weight_groupwise).
-
-Output:
-  models/
-    opt-6.7b-g128-FP16/
-    opt-6.7b-g128-GPTQ_base/
-    opt-6.7b-g128-Damp_0.05/
-    opt-6.7b-g128-Frob_0.001/
-    opt-6.7b-g128-Spectral_0.01/
-    opt-6.7b-g32-GPTQ_base/
-    opt-6.7b-g32-Damp_0.05/
-    opt-6.7b-g32-Frob_0.001/
-    opt-6.7b-g32-Spectral_0.01/
+Each run loads the model, builds Hessians, quantizes, and saves to
+  /mnt/host-share/gptq-models/opt-6.7b-g{group_size}-{label}/
 """
 
-import sys, time, json, math, torch
+import sys, time, json, math, torch, argparse
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from gptq_spec.power_iter import top_singular_vector as power_iteration
 from gptq_spec.quant_utils import quantize_weight_groupwise
 
+try:
+    from tqdm import tqdm
+except ImportError:
+    def tqdm(x, **kwargs): return x
+
 device = torch.device("cuda:0")
 MODEL_NAME = "facebook/opt-6.7b"
 BITS = 4
-GROUP_SIZES = [128, 32]
 CALIB_SAMPLES = 128
 BATCH_SIZE = 8
 SEQ_LEN = 2048
-
-METHODS = [
-    ("FP16",           None,    None),           # special: just save original
-    ("GPTQ_base",      "none",          0.01),
-    ("Damp_0.05",      "stronger_damping", 0.05),
-    ("Frob_0.001",     "frobenius",     0.001),
-    ("Spectral_0.01",  "spectral",      0.01),
-]
-
 BASE_DIR = Path("/mnt/host-share/gptq-models")
-BASE_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def parse_args():
+    p = argparse.ArgumentParser()
+    p.add_argument("--label", required=True, help="e.g. GPTQ_base, Damp_0.05, Frob_0.001, Spectral_0.01, FP16")
+    p.add_argument("--method", default=None, help="none, stronger_damping, frobenius, spectral")
+    p.add_argument("--beta", type=float, default=None, help="regularization beta")
+    p.add_argument("--group_size", type=int, default=128, help="128 or 32")
+    return p.parse_args()
 
 
 def main():
+    args = parse_args()
+    label = args.label
+    method = args.method
+    beta = args.beta
+    group_size = args.group_size
+    is_fp16 = (label == "FP16")
+
     t_start = time.time()
+    print(f"[{time.strftime('%H:%M:%S')}] === {label} (g{group_size}) ===", flush=True)
+    print(f"  Config: method={method} beta={beta}", flush=True)
+
+    # ── Load ──
     print(f"[{time.strftime('%H:%M:%S')}] Loading model and tokenizer...", flush=True)
     from transformers import AutoModelForCausalLM, AutoTokenizer
     from datasets import load_dataset
@@ -67,19 +70,19 @@ def main():
     print(f"[{time.strftime('%H:%M:%S')}] Preparing data...", flush=True)
     ds = load_dataset("wikitext", "wikitext-2-raw-v1", split="train")
     texts = [t for t in ds["text"] if t.strip()]
-    needed = CALIB_SAMPLES * SEQ_LEN * 2 + 1000  # enough for all
-    enc = tokenizer(" ".join(texts), truncation=True, max_length=needed+1000, return_tensors="pt")
+    needed = CALIB_SAMPLES * SEQ_LEN * 2 + 1000
+    enc = tokenizer(" ".join(texts), truncation=True, max_length=needed + 1000, return_tensors="pt")
     ids = enc.input_ids[0]
-    seqs = [ids[i:i+SEQ_LEN] for i in range(0, len(ids)-SEQ_LEN, SEQ_LEN)]
-    total = (CALIB_SAMPLES // BATCH_SIZE) * BATCH_SIZE
-    seqs = seqs[:max(total, 1)]
+    seqs = [ids[i:i + SEQ_LEN] for i in range(0, len(ids) - SEQ_LEN, SEQ_LEN)]
+    total = max(CALIB_SAMPLES // BATCH_SIZE, 1) * BATCH_SIZE
+    seqs = seqs[:total]
     batches = []
     for i in range(0, len(seqs), BATCH_SIZE):
-        inp = torch.stack(seqs[i:i+BATCH_SIZE])
+        inp = torch.stack(seqs[i:i + BATCH_SIZE])
         batches.append({"input_ids": inp, "attention_mask": torch.ones_like(inp)})
     calib_batches = batches[:max(CALIB_SAMPLES // BATCH_SIZE, 1)]
 
-    # ── Linear layer discovery ──
+    # ── Linear layers ──
     print(f"[{time.strftime('%H:%M:%S')}] Finding linear layers...", flush=True)
     handles = [(n, m) for n, m in model.named_modules() if isinstance(m, torch.nn.Linear)]
     quant_handles = [(n, m) for n, m in handles
@@ -106,8 +109,7 @@ def main():
             return fn
         hooks.append(mod.register_forward_hook(mk(name)))
     with torch.no_grad():
-        for bi, b in enumerate(calib_batches):
-            print(f"  batch {bi+1}/{len(calib_batches)}", flush=True)
+        for bi, b in enumerate(tqdm(calib_batches, desc="Hessian", unit="batch")):
             model(b["input_ids"].to(device), attention_mask=b["attention_mask"].to(device))
     for h in hooks:
         h.remove()
@@ -147,129 +149,102 @@ def main():
         for i1 in range(0, in_dim, 128):
             i2 = min(i1 + 128, in_dim)
             for j in range(i1, i2):
-                col = w[:, j:j+1]
-                s = scales[:, j:j+1]
+                col = w[:, j:j + 1]
+                s = scales[:, j:j + 1]
                 q = torch.round(col / s).clamp(-qmax, qmax)
                 dq = q * s
                 err = dq - col
-                w[:, j:j+1] = dq
+                w[:, j:j + 1] = dq
                 if j + 1 < in_dim:
                     h_diag = H_inv[j, j].clamp(min=1e-12)
-                    w[:, j+1:] += (err / h_diag) @ H_inv[j:j+1, j+1:]
+                    w[:, j + 1:] += (err / h_diag) @ H_inv[j:j + 1, j + 1:]
         if act_order:
             w = w[:, torch.argsort(perm)]
         return w.to(dtype=weight.dtype)
 
-    # ── Quantize a single layer ──
-    def quantize_layer(n, H, method, beta, group_size):
-        """Per-channel GPTQ, then optionally requantize to group_size."""
-        Hc = H.float().to("cuda")
-        d = Hc.shape[0]
-        md = torch.diag(Hc).mean()
-
-        if method == "spectral":
-            v = spec_v.get(n)
-            if v is None:
-                return None
-            v_gpu = v.to("cuda")
-            Hc = Hc + 0.01 * md * torch.eye(d, device="cuda", dtype=torch.float32)
-            Hc = Hc + beta * md * torch.outer(v_gpu, v_gpu)
-            del v_gpu
-        elif method == "stronger_damping":
-            Hc = Hc + beta * md * torch.eye(d, device="cuda", dtype=torch.float32)
-        elif method == "frobenius":
-            Hc = Hc + (0.01 + beta) * md * torch.eye(d, device="cuda", dtype=torch.float32)
-        else:  # none = GPTQ_base
-            Hc = Hc + 0.01 * md * torch.eye(d, device="cuda", dtype=torch.float32)
-
-        w = refs[n].float().to("cuda")
-        q_w = correct_gptq(w, Hc, bits=BITS)  # per-channel GPTQ
-
-        if group_size < refs[n].shape[1]:
-            # Requantize to target group_size (like Phase 5)
-            q_w, _, _ = quantize_weight_groupwise(q_w, bits=BITS, group_size=group_size)
-            q_w = q_w.to(device="cuda", dtype=torch.float32)
-
-        delta = q_w.cpu() - refs[n]
-        del Hc, w, q_w
-        return delta
-
-    # ── Spectral estimation (shared across group_sizes) ──
-    print(f"[{time.strftime('%H:%M:%S')}] Spectral estimation...", flush=True)
+    # ── Spectral estimation (only if needed) ──
+    need_spectral = method == "spectral"
     spec_v = {}
-    for ni, n in enumerate(quant_names):
-        if (ni + 1) % 20 == 0:
-            print(f"  spectral {ni+1}/{len(quant_names)}", flush=True)
-        H_reg = hessians[n].float().to("cuda")
-        md = torch.diag(H_reg).mean()
-        H_reg = H_reg + 0.01 * md * torch.eye(H_reg.shape[0], device="cuda", dtype=torch.float32)
-        w = refs[n].float().to("cuda")
-        q_w = correct_gptq(w, H_reg, bits=BITS)
-        dw = (q_w - refs[n].float().to("cuda")).float()
-        v, _ = power_iteration(dw, n_iter=20)
-        spec_v[n] = v.cpu()
-        del H_reg, w, q_w, dw, v
-    print(f"  Estimated {len(spec_v)} spectral vectors", flush=True)
+    if need_spectral:
+        print(f"[{time.strftime('%H:%M:%S')}] Spectral estimation...", flush=True)
+        for ni, n in enumerate(tqdm(quant_names, desc="Spectral", unit="layer")):
+            H_reg = hessians[n].float().to("cuda")
+            md = torch.diag(H_reg).mean()
+            H_reg = H_reg + 0.01 * md * torch.eye(H_reg.shape[0], device="cuda", dtype=torch.float32)
+            w = refs[n].float().to("cuda")
+            q_w = correct_gptq(w, H_reg, bits=BITS)
+            dw = (q_w - refs[n].float().to("cuda")).float()
+            v, _ = power_iteration(dw, n_iter=20)
+            spec_v[n] = v.cpu()
+            del H_reg, w, q_w, dw, v
+        print(f"  Estimated {len(spec_v)} spectral vectors", flush=True)
 
-    # ══════════════════════════════════════════════
-    #  Save loop: group_size × methods
-    # ══════════════════════════════════════════════
+    # ── Quantize ──
+    if not is_fp16:
+        print(f"[{time.strftime('%H:%M:%S')}] Quantizing ({label})...", flush=True)
+        deltas = {}
+        for ni, n in enumerate(tqdm(quant_names, desc="Quant", unit="layer")):
+            H = hessians[n].float().to("cuda")
+            d = H.shape[0]
+            md = torch.diag(H).mean()
 
-    for group_size in GROUP_SIZES:
-        print(f"\n{'='*70}", flush=True)
-        print(f"[{time.strftime('%H:%M:%S')}] Group size = {group_size}", flush=True)
-        print(f"{'='*70}", flush=True)
+            if method == "spectral":
+                v = spec_v.get(n)
+                if v is None:
+                    continue
+                v_gpu = v.to("cuda")
+                H = H + 0.01 * md * torch.eye(d, device="cuda", dtype=torch.float32)
+                H = H + beta * md * torch.outer(v_gpu, v_gpu)
+                del v_gpu
+            elif method == "stronger_damping":
+                H = H + beta * md * torch.eye(d, device="cuda", dtype=torch.float32)
+            elif method == "frobenius":
+                H = H + (0.01 + beta) * md * torch.eye(d, device="cuda", dtype=torch.float32)
+            else:
+                H = H + 0.01 * md * torch.eye(d, device="cuda", dtype=torch.float32)
 
-        for label, method, beta in METHODS:
-            print(f"\n  --- {label} (g{group_size}) ---", flush=True)
-            t0 = time.time()
-            restore()
-            torch.cuda.empty_cache()
+            w = refs[n].float().to("cuda")
+            q_w = correct_gptq(w, H, bits=BITS)
 
-            if label != "FP16":
-                # Quantize all layers
-                deltas = {}
-                for ni, n in enumerate(quant_names):
-                    if (ni + 1) % 20 == 0:
-                        print(f"  quant {ni+1}/{len(quant_names)}", flush=True)
-                    delta = quantize_layer(n, hessians[n], method, beta, group_size)
-                    if delta is not None:
-                        deltas[n] = delta
+            if group_size < refs[n].shape[1]:
+                q_w, _, _ = quantize_weight_groupwise(q_w, bits=BITS, group_size=group_size)
+                q_w = q_w.to(device="cuda", dtype=torch.float32)
 
-                # Apply quantized weights
-                for n, m in quant_handles:
-                    if n in deltas and n in refs:
-                        m.weight.data.copy_(
-                            refs[n].to(device=device, dtype=torch.float16) +
-                            deltas[n].to(device=device, dtype=torch.float16))
-                del deltas
+            deltas[n] = q_w.cpu() - refs[n]
+            del H, w, q_w
 
-            # ── Save ──
-            save_name = f"opt-6.7b-g{group_size}-{label}"
-            save_path = BASE_DIR / save_name
-            print(f"  Saving to {save_path}...", flush=True)
-            model.save_pretrained(str(save_path), safe_serialization=True)
-            tokenizer.save_pretrained(str(save_path))
+        print(f"  Applying weights...", flush=True)
+        for n, m in tqdm(quant_handles, desc="Apply", unit="layer"):
+            if n in deltas and n in refs:
+                m.weight.data.copy_(
+                    refs[n].to(device=device, dtype=torch.float16) +
+                    deltas[n].to(device=device, dtype=torch.float16))
+        del deltas
+    else:
+        print(f"[{time.strftime('%H:%M:%S')}] FP16 mode — no quantization needed", flush=True)
 
-            info = {
-                "model_name": MODEL_NAME,
-                "method": label if label != "FP16" else method,
-                "method_raw": method,
-                "beta": beta if label != "FP16" else None,
-                "bits": BITS,
-                "group_size": group_size,
-                "quant_time_sec": round(time.time() - t0, 1),
-            }
-            with open(save_path / "quantization_info.json", "w") as f:
-                json.dump(info, f, indent=2)
+    # ── Save ──
+    save_name = f"opt-6.7b-g{group_size}-{label}"
+    save_path = BASE_DIR / save_name
+    print(f"[{time.strftime('%H:%M:%S')}] Saving to {save_path}...", flush=True)
+    model.save_pretrained(str(save_path), safe_serialization=True)
+    tokenizer.save_pretrained(str(save_path))
 
-            print(f"  Saved in {time.time()-t0:.1f}s", flush=True)
-            restore()
-            torch.cuda.empty_cache()
+    info = {
+        "model_name": MODEL_NAME,
+        "method": label,
+        "method_raw": method,
+        "beta": beta,
+        "bits": BITS,
+        "group_size": group_size,
+        "quant_time_sec": round(time.time() - t_start, 1),
+    }
+    with open(save_path / "quantization_info.json", "w") as f:
+        json.dump(info, f, indent=2)
 
     elapsed = time.time() - t_start
-    print(f"\n[{time.strftime('%H:%M:%S')}] ALL DONE in {elapsed:.1f}s", flush=True)
-    print(f"Models saved under {BASE_DIR.resolve()}/", flush=True)
+    print(f"[{time.strftime('%H:%M:%S')}] DONE in {elapsed:.1f}s", flush=True)
+    print(f"  Saved to {save_path}", flush=True)
 
 
 if __name__ == "__main__":

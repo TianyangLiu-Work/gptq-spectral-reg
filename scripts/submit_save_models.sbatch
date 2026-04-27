@@ -5,7 +5,7 @@
 #SBATCH -p gpu
 #SBATCH -n 1
 #SBATCH -N 1
-#SBATCH --gres=gpu:1
+#SBATCH --gres=gpushare:1
 #SBATCH -c 8
 #SBATCH --mem=64G
 #SBATCH -t 24:00:00
