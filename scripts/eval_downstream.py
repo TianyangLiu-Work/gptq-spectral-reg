@@ -9,6 +9,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from gptq_spec.power_iter import top_singular_vector as power_iteration
 from lm_eval import simple_evaluate
+from lm_eval.models.huggingface import HFLM
 
 device = torch.device("cuda:0")
 
@@ -214,16 +215,17 @@ def main():
 
         # ── Run lm_eval benchmarks ──
         print(f"[{time.strftime('%H:%M:%S')}]  Running lm_eval tasks...", flush=True)
+
+        lm = HFLM(pretrained=model, batch_size="auto:4")
+
         for task in EVAL_TASKS:
             t_task = time.time()
             try:
                 result = simple_evaluate(
-                    model=model,
+                    lm=lm,
                     tasks=[task],
                     num_fewshot=NUM_FEWSHOT[task],
-                    batch_size="auto:4",
-                    device="cuda",
-                    limit=200,   # limit to 200 samples for speed
+                    limit=200,
                     log_samples=False,
                 )
                 acc = result["results"][task].get("acc,none", result["results"][task].get("acc", "N/A"))
