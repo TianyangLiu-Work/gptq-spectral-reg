@@ -1,7 +1,7 @@
 #!/bin/bash
-#SBATCH -J save_models
-#SBATCH -o experiments/save_models.log
-#SBATCH -e experiments/save_models.err
+#SBATCH -J save_models_nfs
+#SBATCH -o /mnt/host-share/gptq-models/save_models.log
+#SBATCH -e /mnt/host-share/gptq-models/save_models.err
 #SBATCH -p gpu
 #SBATCH -n 1
 #SBATCH -N 1

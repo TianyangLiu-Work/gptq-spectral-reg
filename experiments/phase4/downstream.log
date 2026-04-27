@@ -109,3 +109,52 @@ bootstrapping for stddev: perplexity
 [23:06:28] ==================================================
   quant 20/160
   quant 40/160
+  quant 60/160
+  quant 80/160
+  quant 100/160
+  quant 120/160
+  quant 140/160
+  quant 160/160
+[23:09:59]  Quant done in 211.4s
+[23:10:00]  Running lm_eval tasks...
+Passed argument batch_size = auto:4.0. Detecting largest batch size
+Determined largest batch size: 64
+Passed argument batch_size = auto:4.0. Detecting largest batch size
+Determined largest batch size: 64
+bootstrapping for stddev: perplexity
+[23:10:51]    lambada_openai      : acc=0.6600 ± 0.0336  (50.5s)
+[23:11:02]    hellaswag           : acc=0.4900 ± 0.0354  (11.1s)
+[23:11:09]    arc_challenge       : acc=0.2650 ± 0.0313  (7.1s)
+[23:11:16]    winogrande          : acc=0.6650 ± 0.0335  (6.2s)
+[23:11:17]  Frob_0.001 total: 289.2s
+[23:11:17] ======================================================================
+
+======================================================================
+[23:11:17] ==================================================
+[23:11:17]  Spectral_0.01
+[23:11:17] ==================================================
+  quant 20/160
+  quant 40/160
+  quant 60/160
+  quant 80/160
+  quant 100/160
+  quant 120/160
+  quant 140/160
+  quant 160/160
+[23:14:46]  Quant done in 209.0s
+[23:14:47]  Running lm_eval tasks...
+Passed argument batch_size = auto:4.0. Detecting largest batch size
+Determined largest batch size: 64
+Passed argument batch_size = auto:4.0. Detecting largest batch size
+Determined largest batch size: 64
+bootstrapping for stddev: perplexity
+[23:15:38]    lambada_openai      : acc=0.6450 ± 0.0339  (50.6s)
+[23:15:49]    hellaswag           : acc=0.4800 ± 0.0354  (11.1s)
+[23:15:56]    arc_challenge       : acc=0.2800 ± 0.0318  (7.1s)
+[23:16:02]    winogrande          : acc=0.6850 ± 0.0329  (6.1s)
+[23:16:04]  Spectral_0.01 total: 286.7s
+[23:16:04] ======================================================================
+
+[23:16:04] ALL DONE in 1756.4s
+EXIT_CODE=0
+DONE Sun Apr 26 11:16:07 PM CDT 2026

@@ -45,7 +45,7 @@ METHODS = [
     ("Spectral_0.01",  "spectral",      0.01),
 ]
 
-BASE_DIR = Path("models")
+BASE_DIR = Path("/mnt/host-share/gptq-models")
 BASE_DIR.mkdir(parents=True, exist_ok=True)
 
 
