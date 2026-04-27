@@ -1,12 +1,27 @@
 # GPTQ Spectral Regularization
 
-Experiments comparing regularization strategies for GPTQ quantization
-of OPT models at 1.3B and 6.7B scales.
+Experiments comparing **regularization strategies for GPTQ quantization** of OPT models at 1.3B and 6.7B scales.
 
-**Key idea:** Standard GPTQ dampens the Hessian uniformly via `H' = H + λ·I`.
-We explore two targeted alternatives:
-- **Frobenius**: `H' = H + (λ + β)·I` — uniform stronger dampening
-- **Spectral**: `H' = H + λ·I + β·vvᵀ` — penalize the dominant error direction
+**Key idea:** Standard GPTQ dampens the Hessian uniformly via $\mathbf{H}' = \mathbf{H} + \lambda \mathbf{I}$. We explore two targeted alternatives:
+
+| Method | Hessian Modification | Intuition |
+|--------|---------------------|-----------|
+| **GPTQ\_base** | $\mathbf{H}' = \mathbf{H} + \lambda \mathbf{I}$ | Standard GPTQ baseline |
+| **Damp\_$\beta$** | $\mathbf{H}' = \mathbf{H} + \beta \cdot \overline{\text{diag}(\mathbf{H})} \cdot \mathbf{I}$ | Stronger isotropic damping |
+| **Frob\_$\beta$** | $\mathbf{H}' = \mathbf{H} + (\lambda + \beta) \cdot \overline{\text{diag}(\mathbf{H})} \cdot \mathbf{I}$ | Frobenius norm penalty |
+| **Spectral\_$\beta$** | $\mathbf{H}' = \mathbf{H} + \lambda \mathbf{I} + \beta \cdot \overline{\text{diag}(\mathbf{H})} \cdot \mathbf{v} \mathbf{v}^\top$ | Target dominant error direction |
+
+where $\lambda = 0.01$ is the standard damping coefficient, $\beta$ is the regularization strength, and $\mathbf{v}$ is the top right singular vector of $\Delta \mathbf{W} = \mathbf{W}_q - \mathbf{W}$ estimated via power iteration.
+
+---
+
+## Table of Contents
+
+- [Results](#results)
+- [Quantized Models](#quantized-models)
+- [Project Structure](#project-structure)
+- [Usage](#usage)
+- [Environment](#environment)
 
 ---
 
@@ -14,79 +29,73 @@ We explore two targeted alternatives:
 
 ### OPT-6.7B (g128, 4-bit)
 
-| Method | PPL ↓ | Lambada | HellaSwag | ARC-c | WinoGrande |
+| Method | PPL $\downarrow$ | Lambada | HellaSwag | ARC-c | WinoGrande |
 |--------|-------|---------|-----------|-------|------------|
 | FP16 | 10.89 | — | — | — | — |
-| GPTQ_base | 11.29 | — | — | — | — |
-| Damp_0.05 | **11.28** | — | — | — | — |
-| Frob_0.001 | **11.28** | — | — | — | — |
-| Spectral_0.01 | 11.29 | — | — | — | — |
+| GPTQ\_base | 11.29 | — | — | — | — |
+| Damp\_0.05 | **11.28** | — | — | — | — |
+| Frob\_0.001 | **11.28** | — | — | — | — |
+| Spectral\_0.01 | 11.29 | — | — | — | — |
 
-> *Downstream zero-shot eval results pending (job 322 completed).*
+> Downstream zero-shot eval results pending.
 
 ### OPT-1.3B (g32, 4-bit)
 
-| Method | PPL ↓ |
+| Method | PPL $\downarrow$ |
 |--------|-------|
 | FP16 | 13.28 |
-| RTN_g32 | 14.16 |
-| GPTQ_base | 16.07 |
-| Spectral_0.01 | **16.21** |
-| Frob_0.001 | 16.26 |
+| RTN\_g32 | 14.16 |
+| GPTQ\_base | 16.07 |
+| Spectral\_0.01 | **16.21** |
+| Frob\_0.001 | 16.26 |
 
 ### OPT-125M (g128, 4-bit)
 
-| Method | PPL ↓ |
+| Method | PPL $\downarrow$ |
 |--------|-------|
 | FP16 | 42.27 |
-| RTN_base | 46.36 |
-| GPTQ_base | 49.42 |
-| Frob_0.001 | 49.42 |
+| RTN\_base | 46.36 |
+| GPTQ\_base | 49.42 |
+| Frob\_0.001 | 49.42 |
 
 ---
 
 ## Quantized Models
 
-All models are saved as complete HuggingFace model directories
-and can be loaded directly:
+All models saved on **NFS storage** (`/mnt/host-share/gptq-models/`). Load with:
 
 ```python
-from transformers import AutoModelForCausalLM
+from transformers import AutoModelForCausalLM, AutoTokenizer
+
 model = AutoModelForCausalLM.from_pretrained(
+    "/mnt/host-share/gptq-models/opt-6.7b-g128-GPTQ_base",
+    torch_dtype=torch.float16, device_map="auto",
+)
+tokenizer = AutoTokenizer.from_pretrained(
     "/mnt/host-share/gptq-models/opt-6.7b-g128-GPTQ_base"
 )
 ```
-
-Available on NFS (`/mnt/host-share/gptq-models/`):
 
 | Directory | Method | Group |
 |-----------|--------|-------|
 | `opt-6.7b-g128-FP16` | FP16 baseline | — |
 | `opt-6.7b-g128-GPTQ_base` | Standard GPTQ | 128 |
-| `opt-6.7b-g128-Damp_0.05` | Stronger damping | 128 |
-| `opt-6.7b-g128-Frob_0.001` | Frobenius β=0.001 | 128 |
-| `opt-6.7b-g128-Spectral_0.01` | Spectral β=0.01 | 128 |
+| `opt-6.7b-g128-Damp_0.05` | Stronger damping $(\beta = 0.05)$ | 128 |
+| `opt-6.7b-g128-Frob_0.001` | Frobenius $(\beta = 0.001)$ | 128 |
+| `opt-6.7b-g128-Spectral_0.01` | Spectral $(\beta = 0.01)$ | 128 |
 | `opt-6.7b-g32-GPTQ_base` | Standard GPTQ | 32 |
-| `opt-6.7b-g32-Damp_0.05` | Stronger damping | 32 |
-| `opt-6.7b-g32-Frob_0.001` | Frobenius β=0.001 | 32 |
-| `opt-6.7b-g32-Spectral_0.01` | Spectral β=0.01 | 32 |
+| `opt-6.7b-g32-Damp_0.05` | Stronger damping $(\beta = 0.05)$ | 32 |
+| `opt-6.7b-g32-Frob_0.001` | Frobenius $(\beta = 0.001)$ | 32 |
+| `opt-6.7b-g32-Spectral_0.01` | Spectral $(\beta = 0.01)$ | 32 |
 
 Each directory contains:
-- `model.safetensors` — quantized weights
-- `config.json` — model configuration
-- `tokenizer.json` / `tokenizer_config.json`
-- `quantization_info.json` — metadata (method, beta, group_size, quant_time)
 
----
-
-## Regularization Methods
-
-| Method | Hessian Modification | Intuition |
-|--------|---------------------|-----------|
-| **GPTQ_base** | None (damp=0.01) | Standard GPTQ baseline |
-| **Damp\\_β** | `H' = H + β·mean(diag(H))·I` | Stronger isotropic damping |
-| **Frob\\_β** | `H' = H + (damp+β)·mean(diag(H))·I` | Frobenius norm penalty |
-| **Spectral\\_β** | `H' = H + damp·mean(diag(H))·I + β·mean(diag(H))·vvᵀ` | Target dominant error direction |
+```
+model.safetensors           # Quantized weights
+config.json                 # Model configuration
+tokenizer.json / tokenizer_config.json
+quantization_info.json      # Metadata (method, beta, group_size, quant_time)
+```
 
 ---
 
@@ -98,38 +107,37 @@ gptq-spectral-reg/
 │   ├── gptq.py                   # GPTQ quantization algorithm
 │   ├── power_iter.py             # Power iteration for spectral estimation
 │   ├── quant_utils.py            # Group-wise quantization utilities
-│   ├── config.py                 # Experiment configuration dataclasses
+│   ├── config.py                 # Experiment dataclasses
 │   └── __init__.py
 ├── scripts/
 │   ├── run_phase2.py             # Phase 2: OPT-1.3B comparison
 │   ├── run_phase4.py             # Phase 4: OPT-6.7B comparison
 │   ├── run_phase5.py             # Phase 5: OPT-6.7B g32 sweep
-│   ├── save_quantized_models.py  # Save quantized models (CLI: --label --method --beta --group_size)
+│   ├── save_quantized_models.py  # CLI tool: save quantized models
 │   ├── eval_downstream.py        # lm_eval zero-shot evaluation
-│   ├── submit_save_model.sh      # Submit all 9 model-saving jobs to Slurm
+│   ├── submit_save_model.sh      # Submit all 9 model jobs to Slurm
 │   └── *.sbatch                  # Slurm submission scripts
 ├── experiments/                  # Results (summary.json per phase)
-├── models/                       # (local cached models)
-└── docs/server.md                # Server & Slurm usage guide
+└── docs/server.md                # Server and Slurm usage guide
 ```
 
 ---
 
-## Running on Slurm
+## Usage
+
+### Saving Models
 
 ```bash
-# Save all quantized models (9 parallel jobs)
+# Submit all 9 model-saving jobs to the Slurm cluster
 bash scripts/submit_save_model.sh
 
-# Monitor
-squeue -u tyliu
-turm          # TUI viewer
-
-# Downstream eval (after models are saved)
-# (coming soon: eval from saved models directly)
+# For single-model runs, see the supported CLI flags:
+python scripts/save_quantized_models.py --help
 ```
 
-Each job uses tqdm progress bars visible in logs:
+### Monitor Progress
+
+Each job uses `tqdm` progress bars visible in its log file:
 
 ```
 Hessian: 100%|████████| 16/16 [00:05<00:00]
@@ -138,15 +146,20 @@ Quant: 100%|██████████| 160/160 [01:45<00:00]
 Apply: 100%|███████████| 160/160 [00:02<00:00]
 ```
 
+```bash
+squeue -u tyliu
+turm          # TUI queue viewer
+```
+
 ---
 
 ## Environment
 
-| | Path |
-|---|---|
+| Item | Path |
+|------|------|
 | Server | `tyliu@yumingz5-linux-ml-1` |
 | Code | `~/gptq-spectral-reg/` |
 | Conda | `/home/tyliu/quantization/.conda` |
-| Model output | `/mnt/host-share/gptq-models/` (467G NFS) |
-| Data disk | `/data/` (887G, ~50G free) |
-| GitHub | `github.com/TianyangLiu-Work/gptq-spectral-reg` |
+| Model storage | `/mnt/host-share/gptq-models/` (467 GB NFS) |
+| Data disk | `/data/` (887 GB) |
+| GitHub | [TianyangLiu-Work/gptq-spectral-reg](https://github.com/TianyangLiu-Work/gptq-spectral-reg) |
