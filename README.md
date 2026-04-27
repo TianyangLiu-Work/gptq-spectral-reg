@@ -85,7 +85,7 @@ tokenizer = AutoTokenizer.from_pretrained(
 | `opt-6.7b-g128-Spectral_0.01` | Spectral $(\beta = 0.01)$ | 128 |
 | `opt-6.7b-g32-GPTQ_base` | Standard GPTQ | 32 |
 | `opt-6.7b-g32-Damp_0.05` | Stronger damping $(\beta = 0.05)$ | 32 |
-| `opt-6.7b-g32-Frob_0.001$` | Frobenius $(\beta = 0.001)$ | 32 |
+| `opt-6.7b-g32-Frob_0.001` | Frobenius $(\beta = 0.001)$ | 32 |
 | `opt-6.7b-g32-Spectral_0.01` | Spectral $(\beta = 0.01)$ | 32 |
 
 Each directory contains:
@@ -131,9 +131,8 @@ gptq-spectral-reg/
 # Submit all 9 model-saving jobs to the Slurm cluster
 bash scripts/submit_save_model.sh
 
-# Or run a single configuration directly:
-python scripts/save_quantized_models.py \
-    --label GPTQ_base --method none --beta 0.01 --group_size 128
+# For single-model runs, see the supported CLI flags:
+python scripts/save_quantized_models.py --help
 ```
 
 ### Monitor Progress
